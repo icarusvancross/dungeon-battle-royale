@@ -1,14 +1,61 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>Dungeon Battle Royale</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dungeon Battle Royale - Lobby</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --gold: #ffd700; --lava: #ff4500; --dark: #0a0a0a; }
+        body { margin: 0; background: var(--dark); color: white; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; }
+        .header { display: flex; justify-content: space-between; padding: 20px; background: #111; border-bottom: 3px solid var(--gold); }
+        .stat-box { background: #222; padding: 10px; border-radius: 5px; border: 1px solid var(--gold); }
+        .main-view { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .player-visual { width: 100px; height: 140px; border: 3px solid var(--gold); display: flex; align-items: center; justify-content: center; font-size: 3rem; animation: float 3s infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        .footer { display: flex; justify-content: center; gap: 10px; padding: 40px; background: #000; }
+        .btn { padding: 10px 20px; border-radius: 5px; border: none; font-weight: bold; cursor: pointer; }
+        .btn-play { background: var(--lava); color: white; font-size: 1.2rem; padding: 10px 40px; }
+        #loading-screen { position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; z-index: 99; }
+    </style>
 </head>
-<body style="background: #111; color: #fff; text-align: center; padding-top: 50px; font-family: sans-serif;">
-    <h1>⚔️ المصنع جاهز يا بطل ⚔️</h1>
-    <p>هذا هو حجر الأساس لمشروع الدنجن</p>
-    <div style="border: 2px solid gold; display: inline-block; padding: 20px;">
-        قريباً: اللوبي والمتجر 🏰
+<body>
+    <div id="loading-screen">جاري تحميل الدنجن... ⚔️</div>
+    <div class="header">
+        <div class="stat-box">👤 <span id="username">...</span></div>
+        <div class="stat-box">🪙 <span id="coins" style="color:gold">0</span></div>
     </div>
+    <div class="main-view">
+        <div class="player-visual">🛡️</div>
+        <h2 id="welcome-msg">مرحباً بك أيها المحارب</h2>
+    </div>
+    <div class="footer">
+        <button class="btn" style="background:#333; color:white">📦 المخزن</button>
+        <button class="btn" style="background:#333; color:white">🎡 العجلة</button>
+        <button class="btn btn-play" onclick="alert('البحث عن قيم...')">إلعب الآن</button>
+        <button class="btn" style="background:#333; color:white">🛒 المتجر</button>
+    </div>
+    <script>
+        const PROJECT_URL = "https://qcgcyqvrfvkajbqlszbp.supabase.co";
+        const ANON_KEY = "sb_publishable_juEni3P1axAVBjMLrihkWw_pYmLGvEy";
+        const _supabase = supabase.createClient(PROJECT_URL, ANON_KEY);
+
+        async function initLobby() {
+            let guestId = localStorage.getItem('dungeon_guest_id');
+            if (!guestId) {
+                guestId = 'guest_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('dungeon_guest_id', guestId);
+                const randomName = "Warrior_" + Math.floor(1000 + Math.random() * 9000);
+                await _supabase.from('profiles').insert([{ guest_id: guestId, username: randomName, silver_coins: 500 }]);
+            }
+            const { data: profile } = await _supabase.from('profiles').select('*').eq('guest_id', guestId).single();
+            if (profile) {
+                document.getElementById('username').innerText = profile.username;
+                document.getElementById('coins').innerText = profile.silver_coins;
+                document.getElementById('loading-screen').style.display = 'none';
+            }
+        }
+        initLobby();
+    </script>
 </body>
 </html>

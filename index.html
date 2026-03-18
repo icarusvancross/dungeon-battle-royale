@@ -1,60 +1,110 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dungeon Battle Royale - Lobby</title>
+    <!-- Supabase Library -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --gold: #ffd700; --lava: #ff4500; --dark: #0a0a0a; }
-        body { margin: 0; background: var(--dark); color: white; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; }
-        .header { display: flex; justify-content: space-between; padding: 20px; background: #111; border-bottom: 3px solid var(--gold); }
-        .stat-box { background: #222; padding: 10px; border-radius: 5px; border: 1px solid var(--gold); }
-        .main-view { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .player-visual { width: 100px; height: 140px; border: 3px solid var(--gold); display: flex; align-items: center; justify-content: center; font-size: 3rem; animation: float 3s infinite; }
+        :root { --gold: #ffd700; --lava: #ff4500; --dark: #0a0a0a; --gray: #1a1a1a; }
+        body { margin: 0; background: var(--dark); color: white; font-family: 'Segoe UI', Tahoma, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* Header: Username & Coins */
+        .header { display: flex; justify-content: space-between; padding: 15px 25px; background: #111; border-bottom: 3px solid var(--gold); box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .stat-box { background: var(--gray); padding: 8px 15px; border-radius: 5px; border: 1px solid var(--gold); display: flex; align-items: center; gap: 10px; font-weight: bold; }
+        .coins-val { color: var(--gold); }
+
+        /* Main View: Player Visual */
+        .main-view { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle, #222 0%, #000 100%); }
+        .player-visual { width: 120px; height: 160px; border: 4px solid var(--gold); border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 4rem; animation: float 3s ease-in-out infinite; box-shadow: 0 0 30px rgba(255, 215, 0, 0.2); }
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
-        .footer { display: flex; justify-content: center; gap: 10px; padding: 40px; background: #000; }
-        .btn { padding: 10px 20px; border-radius: 5px; border: none; font-weight: bold; cursor: pointer; }
-        .btn-play { background: var(--lava); color: white; font-size: 1.2rem; padding: 10px 40px; }
-        #loading-screen { position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; z-index: 99; }
+        .welcome-text { margin-top: 25px; color: #ccc; letter-spacing: 1px; text-transform: uppercase; }
+
+        /* Footer Buttons */
+        .footer { display: flex; justify-content: center; gap: 15px; padding: 40px; background: #000; border-top: 1px solid #333; flex-wrap: wrap; }
+        .btn { padding: 12px 25px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.9rem; text-transform: uppercase; }
+        .btn-sec { background: #333; color: #ccc; border: 1px solid #444; }
+        .btn-play { background: var(--lava); color: white; font-size: 1.4rem; padding: 12px 50px; border: 2px solid white; box-shadow: 0 0 20px rgba(255, 69, 0, 0.4); }
+        .btn:hover { transform: translateY(-3px); filter: brightness(1.2); }
+
+        /* Loading Screen */
+        #loading-screen { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999; }
+        .loader { border: 5px solid #333; border-top: 5px solid var(--lava); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <div id="loading-screen">جاري تحميل الدنجن... ⚔️</div>
-    <div class="header">
-        <div class="stat-box">👤 <span id="username">...</span></div>
-        <div class="stat-box">🪙 <span id="coins" style="color:gold">0</span></div>
+
+    <div id="loading-screen">
+        <div class="loader"></div>
+        <div style="letter-spacing: 2px;">ENTERING DUNGEON...</div>
     </div>
+
+    <div class="header">
+        <div class="stat-box">👤 <span id="username">Loading...</span></div>
+        <div class="stat-box">🪙 <span id="coins" class="coins-val">0</span></div>
+    </div>
+
     <div class="main-view">
         <div class="player-visual">🛡️</div>
-        <h2 id="welcome-msg">مرحباً بك أيها المحارب</h2>
+        <h2 id="welcome-msg" class="welcome-text">Prepare for Battle</h2>
     </div>
+
     <div class="footer">
-        <button class="btn" style="background:#333; color:white">📦 المخزن</button>
-        <button class="btn" style="background:#333; color:white">🎡 العجلة</button>
-        <button class="btn btn-play" onclick="alert('البحث عن قيم...')">إلعب الآن</button>
-        <button class="btn" style="background:#333; color:white">🛒 المتجر</button>
+        <button class="btn btn-sec">Warehouse</button>
+        <button class="btn btn-sec">Lucky Wheel</button>
+        <button class="btn btn-play" onclick="playGame()">PLAY BATTLE</button>
+        <button class="btn btn-sec">Shop</button>
     </div>
+
     <script>
-        const PROJECT_URL = "https://qcgcyqvrfvkajbqlszbp.supabase.co";
-        const ANON_KEY = "sb_publishable_juEni3P1axAVBjMLrihkWw_pYmLGvEy";
-        const _supabase = supabase.createClient(PROJECT_URL, ANON_KEY);
+        // --- Supabase Config ---
+        const SB_URL = "https://qcgcyqvrfvkajbqlszbp.supabase.co";
+        const SB_KEY = "sb_publishable_juEni3P1axAVBjMLrihkWw_pYmLGvEy";
+        const _supabase = supabase.createClient(SB_URL, SB_KEY);
 
         async function initLobby() {
-            let guestId = localStorage.getItem('dungeon_guest_id');
-            if (!guestId) {
-                guestId = 'guest_' + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('dungeon_guest_id', guestId);
-                const randomName = "Warrior_" + Math.floor(1000 + Math.random() * 9000);
-                await _supabase.from('profiles').insert([{ guest_id: guestId, username: randomName, silver_coins: 500 }]);
-            }
-            const { data: profile } = await _supabase.from('profiles').select('*').eq('guest_id', guestId).single();
-            if (profile) {
-                document.getElementById('username').innerText = profile.username;
-                document.getElementById('coins').innerText = profile.silver_coins;
-                document.getElementById('loading-screen').style.display = 'none';
+            try {
+                let guestId = localStorage.getItem('dungeon_guest_id');
+                
+                if (!guestId) {
+                    guestId = 'guest_' + Math.random().toString(36).substr(2, 9);
+                    localStorage.setItem('dungeon_guest_id', guestId);
+                    
+                    const randomName = "Warrior_" + Math.floor(1000 + Math.random() * 9000);
+                    await _supabase.from('profiles').insert([
+                        { guest_id: guestId, username: randomName, silver_coins: 500 }
+                    ]);
+                }
+
+                const { data: profile, error } = await _supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('guest_id', guestId)
+                    .single();
+
+                if (profile) {
+                    document.getElementById('username').innerText = profile.username;
+                    document.getElementById('coins').innerText = profile.silver_coins.toLocaleString();
+                    document.getElementById('welcome-msg').innerText = `Welcome, ${profile.username}`;
+                }
+            } catch (err) {
+                console.error("Initialization failed:", err);
+            } finally {
+                // Hide loading screen regardless of success/fail
+                setTimeout(() => {
+                    const loader = document.getElementById('loading-screen');
+                    loader.style.opacity = '0';
+                    setTimeout(() => loader.style.display = 'none', 500);
+                }, 1000);
             }
         }
+
+        function playGame() {
+            alert("🔥 Searching for opponents... Coming Soon!");
+        }
+
         initLobby();
     </script>
 </body>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dungeon Battle - Pro Prototype</title>
+    <title>Dungeon Battle - AI & Combat</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <style>
         body { margin: 0; background: #050505; overflow: hidden; }
@@ -14,11 +14,11 @@
             pointer-events: none;
         }
         .btn { 
-            width: 70px; height: 70px; background: rgba(255,255,255,0.15); 
+            width: 60px; height: 60px; background: rgba(255,255,255,0.15); 
             border: 2px solid rgba(255,255,255,0.5); border-radius: 50%; color: white; 
             display: flex; align-items: center; justify-content: center; 
-            font-size: 1.5rem; pointer-events: auto; cursor: pointer;
-            backdrop-filter: blur(5px);
+            font-size: 1rem; pointer-events: auto; cursor: pointer;
+            backdrop-filter: blur(5px); font-weight: bold;
         }
         .btn:active { background: rgba(255,255,255,0.4); transform: scale(0.9); }
     </style>
@@ -26,14 +26,15 @@
 <body>
 
     <div id="controls">
-        <div style="display:flex; gap:15px;">
-            <div class="btn" id="left-btn">◀</div>
-            <div class="btn" id="right-btn">▶</div>
+        <div style="display:flex; gap:10px;">
+            <div class="btn" id="left-btn">LEFT</div>
+            <div class="btn" id="right-btn">RIGHT</div>
         </div>
-        <div style="display:flex; gap:15px;">
-            <div class="btn" id="jump-btn">▲</div>
-            <div class="btn" id="sword-btn" style="background:rgba(255,0,0,0.5)">⚔️</div>
-            <div class="btn" id="shoot-btn" style="background:rgba(255,215,0,0.5); color:black">🏹</div>
+        <div style="display:flex; gap:10px;">
+            <div class="btn" id="jump-btn">JUMP</div>
+            <div class="btn" id="sword-btn" style="background:rgba(255,0,0,0.5)">K</div>
+            <div class="btn" id="shoot-btn" style="background:rgba(0,255,0,0.3)">O</div>
+            <div class="btn" id="shield-btn" style="background:rgba(255,215,0,0.5); color:black">M</div>
         </div>
     </div>
 
@@ -42,90 +43,77 @@
             type: Phaser.AUTO,
             width: window.innerWidth,
             height: window.innerHeight,
-            physics: { 
-                default: 'arcade', 
-                arcade: { gravity: { y: 1400 }, debug: false } 
-            },
+            physics: { default: 'arcade', arcade: { gravity: { y: 1400 }, debug: false } },
             scene: { create: create, update: update }
         };
 
-        let player, enemy, platforms, arrows, cursors, wasd, hpBarPlayer, hpBarEnemy;
+        let player, enemy, platforms, arrows, cursors, keys, hpBarPlayer, hpBarEnemy;
         let playerHP = 100, enemyHP = 100;
-        let moveLeft = false, moveRight = false, doJump = false;
-        let isFacingRight = true;
-        let canDoubleJump = false; // نظام القفز المزدوج
+        let moveLeft = false, moveRight = false, isFacingRight = true;
+        let canDoubleJump = false, isShielding = false;
+        
+        // Enemy AI variables
+        let enemyState = 'PATROL'; // PATROL or CHASE
+        let enemyPatrolStart = 1200;
+        let enemyPatrolRange = 300;
 
         new Phaser.Game(config);
 
         function create() {
             const scene = this;
-
-            // 1. إعداد حدود العالم (خريطة عريضة جداً)
             const worldWidth = 3000;
-            const worldHeight = window.innerHeight;
-            this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
+            this.physics.world.setBounds(0, 0, worldWidth, window.innerHeight);
 
-            // 2. تصميم المنصات (بألوان واضحة)
+            // 1. Platforms
             platforms = this.physics.add.staticGroup();
-            
-            // الأرضية
-            createPlatform(this, worldWidth/2, worldHeight - 20, worldWidth, 40);
-            
-            // منصات عشوائية في الخريطة
-            createPlatform(this, 400, 450, 250, 30);
-            createPlatform(this, 800, 300, 250, 30);
+            createPlatform(this, worldWidth/2, window.innerHeight - 20, worldWidth, 40);
+            createPlatform(this, 600, 450, 300, 30);
             createPlatform(this, 1200, 450, 300, 30);
-            createPlatform(this, 1600, 350, 200, 30);
-            createPlatform(this, 2100, 450, 400, 30);
-            createPlatform(this, 2600, 300, 300, 30);
 
-            // 3. اللاعب (الأخضر)
+            // 2. Player
             player = this.add.rectangle(100, 400, 45, 65, 0x00ff00);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
             this.physics.add.collider(player, platforms);
 
-            // 4. العدو (الأحمر)
-            enemy = this.add.rectangle(1200, 400, 45, 65, 0xff0000);
+            // 3. Enemy
+            enemy = this.add.rectangle(enemyPatrolStart, 400, 45, 65, 0xff0000);
             this.physics.add.existing(enemy);
             enemy.body.setCollideWorldBounds(true);
             this.physics.add.collider(enemy, platforms);
 
-            // 5. الكاميرا (تلاحق اللاعب)
-            this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
+            // 4. Camera
+            this.cameras.main.setBounds(0, 0, worldWidth, window.innerHeight);
             this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
-            // 6. السهام
+            // 5. Arrows
             arrows = this.physics.add.group();
 
-            // 7. عدادات الدم
-            hpBarPlayer = this.add.graphics().setScrollFactor(0); // ثابتة في الشاشة
-            hpBarEnemy = this.add.graphics();
-
-            // 8. التحكم (WASD + Arrows)
+            // 6. Keys (K, O, M, W, A, S, D)
             cursors = this.input.keyboard.createCursorKeys();
-            wasd = this.input.keyboard.addKeys('W,A,S,D');
+            keys = this.input.keyboard.addKeys('W,A,S,D,K,O,M');
 
-            // أزرار الموبايل
+            // 7. Mobile Controls
             setupButton('left-btn', () => moveLeft = true, () => moveLeft = false);
             setupButton('right-btn', () => moveRight = true, () => moveRight = false);
-            
-            // القفز (لمسة واحدة للقفزة)
             document.getElementById('jump-btn').onpointerdown = () => handleJump();
-            
-            document.getElementById('sword-btn').onpointerdown = () => attackMelee(scene);
-            document.getElementById('shoot-btn').onpointerdown = () => fireArrow(scene);
+            document.getElementById('sword-btn').onpointerdown = () => handleSword(scene);
+            document.getElementById('shoot-btn').onpointerdown = () => handleShoot(scene);
+            document.getElementById('shield-btn').onpointerdown = () => handleShield(scene);
 
-            // التصادم
+            // Combat Overlaps
             this.physics.add.overlap(arrows, enemy, (en, arr) => {
                 arr.destroy();
                 enemyHP -= 5;
             });
+
+            hpBarPlayer = this.add.graphics().setScrollFactor(0);
+            hpBarEnemy = this.add.graphics();
         }
 
         function createPlatform(scene, x, y, w, h) {
-            const p = scene.add.rectangle(x, y, w, h, 0x6a0dad); // لون أرجواني
-            p.setStrokeStyle(3, 0xffd700); // حواف ذهبية
+            const p = scene.add.rectangle(x, y, w, h, 0x6a0dad);
+            p.setStrokeStyle(3, 0xffd700);
             platforms.add(p);
         }
 
@@ -144,9 +132,10 @@
             }
         }
 
-        function attackMelee(scene) {
+        function handleSword(scene) {
+            if (isShielding) return;
             const range = isFacingRight ? 60 : -60;
-            const hitbox = scene.add.rectangle(player.x + range, player.y, 60, 30, 0xff0000, 0.4);
+            const hitbox = scene.add.rectangle(player.x + range, player.y, 60, 30, 0xff0000, 0.5);
             scene.physics.add.existing(hitbox);
             hitbox.body.setAllowGravity(false);
             if (Phaser.Geom.Intersects.RectangleToRectangle(hitbox.getBounds(), enemy.getBounds())) {
@@ -155,54 +144,86 @@
             scene.time.delayedCall(100, () => hitbox.destroy());
         }
 
-        function fireArrow(scene) {
+        function handleShoot(scene) {
+            if (isShielding) return;
             const arrow = scene.add.rectangle(player.x, player.y, 25, 6, 0xffff00);
             arrows.add(arrow);
             arrow.body.setAllowGravity(false);
-            arrow.body.setVelocityX(isFacingRight ? 700 : -700);
+            arrow.body.setVelocityX(isFacingRight ? 750 : -750);
             scene.time.delayedCall(1500, () => arrow.destroy());
         }
 
-        function update() {
-            const scene = this;
+        function handleShield(scene) {
+            if (isShielding) return;
+            isShielding = true;
+            const shieldVisual = scene.add.rectangle(player.x, player.y, 70, 90, 0xffff00, 0.3);
+            shieldVisual.setStrokeStyle(3, 0xffff00);
+            
+            scene.time.addEvent({
+                delay: 10,
+                repeat: 100,
+                callback: () => { 
+                    shieldVisual.x = player.x; 
+                    shieldVisual.y = player.y; 
+                }
+            });
 
-            // حركة اللاعب
-            if (cursors.left.isDown || wasd.A.isDown || moveLeft) {
+            scene.time.delayedCall(1000, () => {
+                isShielding = false;
+                shieldVisual.destroy();
+            });
+        }
+
+        function update() {
+            // Player Movement
+            if (cursors.left.isDown || keys.A.isDown || moveLeft) {
                 player.body.setVelocityX(-300); isFacingRight = false;
-            } else if (cursors.right.isDown || wasd.D.isDown || moveRight) {
+            } else if (cursors.right.isDown || keys.D.isDown || moveRight) {
                 player.body.setVelocityX(300); isFacingRight = true;
             } else { player.body.setVelocityX(0); }
 
-            // القفز بالكيبورد (JustDown لمنع القفز المستمر)
-            if (Phaser.Input.Keyboard.JustDown(wasd.W) || Phaser.Input.Keyboard.JustDown(cursors.up)) {
-                handleJump();
-            }
+            if (Phaser.Input.Keyboard.JustDown(keys.W) || Phaser.Input.Keyboard.JustDown(cursors.up)) handleJump();
+            if (Phaser.Input.Keyboard.JustDown(keys.K)) handleSword(this);
+            if (Phaser.Input.Keyboard.JustDown(keys.O)) handleShoot(this);
+            if (Phaser.Input.Keyboard.JustDown(keys.M)) handleShield(this);
 
-            // ذكاء اصطناعي للعدو
+            // Enemy AI Logic
             if (enemy.active && enemyHP > 0) {
-                const dist = player.x - enemy.x;
-                if (Math.abs(dist) < 500) { // يطاردك إذا اقتربت
-                    enemy.body.setVelocityX(dist > 0 ? 120 : -120);
+                const distanceToPlayer = Phaser.Math.Distance.Between(player.x, player.y, enemy.x, enemy.y);
+
+                if (enemyState === 'PATROL') {
+                    // Patrol Movement
+                    if (enemy.x >= enemyPatrolStart + enemyPatrolRange) enemy.body.setVelocityX(-100);
+                    else if (enemy.x <= enemyPatrolStart - enemyPatrolRange) enemy.body.setVelocityX(100);
+                    else if (enemy.body.velocity.x === 0) enemy.body.setVelocityX(100);
+
+                    // Switch to Chase
+                    if (distanceToPlayer < 350) enemyState = 'CHASE';
+                } 
+                else if (enemyState === 'CHASE') {
+                    // Chase Player
+                    const direction = player.x > enemy.x ? 150 : -150;
+                    enemy.body.setVelocityX(direction);
+
+                    // Switch back to Patrol (7 meters = approx 450px)
+                    if (distanceToPlayer > 450) enemyState = 'PATROL';
                 }
             } else if (enemy.active) {
                 enemy.destroy();
             }
 
-            // تحديث عدادات الدم
-            drawHP(hpBarPlayer, 20, 20, playerHP, true); // ثابتة في الزاوية
+            // UI Update
+            drawHP(hpBarPlayer, 20, 20, playerHP, true);
             if(enemy.active) drawHP(hpBarEnemy, enemy.x - 25, enemy.y - 60, enemyHP, false);
             else hpBarEnemy.clear();
         }
 
         function drawHP(graphics, x, y, hp, isStatic) {
             graphics.clear();
-            const drawX = isStatic ? x : x;
-            const drawY = isStatic ? y : y;
-            
             graphics.fillStyle(0x000000);
-            graphics.fillRect(drawX, drawY, 100, 10);
+            graphics.fillRect(x, y, 100, 10);
             graphics.fillStyle(hp > 30 ? 0x00ff00 : 0xff0000);
-            graphics.fillRect(drawX, drawY, (hp / 100) * 100, 10);
+            graphics.fillRect(x, y, (hp / 100) * 100, 10);
         }
     </script>
 </body>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dungeon Battle - Arena</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; }
+        #controls { position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; box-sizing: border-box; z-index: 10; }
+        .btn { width: 60px; height: 60px; background: rgba(255,255,255,0.2); border: 2px solid #fff; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <div style="display:flex; gap:10px;">
+            <div class="btn" id="left">◀</div>
+            <div class="btn" id="right">▶</div>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <div class="btn" id="jump">▲</div>
+            <div class="btn" id="sword" style="background:red">⚔️</div>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: window.innerWidth,
+            height: window.innerHeight,
+            physics: { default: 'arcade', arcade: { gravity: { y: 1000 } } },
+            scene: { create: create, update: update }
+        };
+
+        let player, cursors, platforms;
+        let moveLeft = false, moveRight = false, doJump = false;
+
+        new Phaser.Game(config);
+
+        function create() {
+            platforms = this.physics.add.staticGroup();
+            platforms.add(this.add.rectangle(window.innerWidth/2, window.innerHeight-20, window.innerWidth, 40, 0x333333));
+            platforms.add(this.add.rectangle(400, 400, 200, 20, 0x666666));
+
+            player = this.add.rectangle(100, 100, 40, 60, 0x00ff00);
+            this.physics.add.existing(player);
+            player.body.setCollideWorldBounds(true);
+            this.physics.add.collider(player, platforms);
+
+            cursors = this.input.keyboard.createCursorKeys();
+
+            // Mobile Controls
+            document.getElementById('left').ontouchstart = () => moveLeft = true;
+            document.getElementById('left').ontouchend = () => moveLeft = false;
+            document.getElementById('right').ontouchstart = () => moveRight = true;
+            document.getElementById('right').ontouchend = () => moveRight = false;
+            document.getElementById('jump').ontouchstart = () => doJump = true;
+        }
+
+        function update() {
+            if (cursors.left.isDown || moveLeft) player.body.setVelocityX(-200);
+            else if (cursors.right.isDown || moveRight) player.body.setVelocityX(200);
+            else player.body.setVelocityX(0);
+
+            if ((cursors.up.isDown || doJump) && player.body.touching.down) {
+                player.body.setVelocityY(-500);
+                doJump = false;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dungeon Battle - Smart AI</title>
+    <title>Dungeon Battle - New Enemy & Parry</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <style>
         body { margin: 0; background: #050505; overflow: hidden; }
@@ -43,23 +43,18 @@
             type: Phaser.AUTO,
             width: window.innerWidth,
             height: window.innerHeight,
-            physics: { 
-                default: 'arcade', 
-                arcade: { gravity: { y: 2200 }, debug: false } 
-            },
+            physics: { default: 'arcade', arcade: { gravity: { y: 2200 }, debug: false } },
             scene: { create: create, update: update }
         };
 
-        let player, enemy, platforms, arrows, enemyArrows, cursors, keys, hpBarPlayer, hpBarEnemy;
-        let playerHP = 100, enemyHP = 100;
+        let player, enemyArcher, enemyMelee, platforms, arrows, enemyArrows, cursors, keys, hpBarPlayer, hpBarArcher, hpBarMelee;
+        let playerHP = 100, archerHP = 100, meleeHP = 100;
         let moveLeft = false, moveRight = false, isFacingRight = true;
         let canDoubleJump = false, isShielding = false;
         
-        let enemyState = 'PATROL';
-        let enemyPatrolStart = 1200;
-        let enemyPatrolRange = 400;
-        let nextEnemyFire = 0;
-        const ENEMY_SPEED = 110; // أبطأ من اللاعب بـ 40% تقريباً
+        let archerState = 'PATROL', meleeState = 'PATROL';
+        let nextArcherFire = 0, nextMeleeAttack = 0;
+        const ENEMY_SPEED = 120;
 
         new Phaser.Game(config);
 
@@ -71,19 +66,26 @@
             platforms = this.physics.add.staticGroup();
             createPlatform(this, worldWidth/2, window.innerHeight - 20, worldWidth, 40);
             createPlatform(this, 400, 450, 200, 30);
-            createPlatform(this, 750, 320, 200, 30);
-            createPlatform(this, 1200, 480, 250, 30);
-            createPlatform(this, 1600, 350, 200, 30);
+            createPlatform(this, 1000, 480, 250, 30);
+            createPlatform(this, 2000, 450, 300, 30);
 
+            // Player
             player = this.add.rectangle(100, 400, 45, 65, 0x00ff00);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
             this.physics.add.collider(player, platforms);
 
-            enemy = this.add.rectangle(enemyPatrolStart, 400, 45, 65, 0xff0000);
-            this.physics.add.existing(enemy);
-            enemy.body.setCollideWorldBounds(true);
-            this.physics.add.collider(enemy, platforms);
+            // Enemy 1: Archer (Red)
+            enemyArcher = this.add.rectangle(1200, 400, 45, 65, 0xff0000);
+            this.physics.add.existing(enemyArcher);
+            enemyArcher.body.setCollideWorldBounds(true);
+            this.physics.add.collider(enemyArcher, platforms);
+
+            // Enemy 2: Melee (Blue)
+            enemyMelee = this.add.rectangle(2200, 400, 45, 65, 0x0000ff);
+            this.physics.add.existing(enemyMelee);
+            enemyMelee.body.setCollideWorldBounds(true);
+            this.physics.add.collider(enemyMelee, platforms);
 
             this.cameras.main.setBounds(0, 0, worldWidth, window.innerHeight);
             this.cameras.main.startFollow(player, true, 0.1, 0.1);
@@ -101,14 +103,21 @@
             document.getElementById('shoot-btn').onpointerdown = () => handleShoot(scene);
             document.getElementById('shield-btn').onpointerdown = () => handleShield(scene);
 
-            this.physics.add.overlap(arrows, enemy, (en, arr) => { arr.destroy(); enemyHP -= 5; });
+            // Damage Overlaps
+            this.physics.add.overlap(arrows, [enemyArcher, enemyMelee], (arr, en) => {
+                if (en === enemyArcher) archerHP -= 5;
+                if (en === enemyMelee) meleeHP -= 5;
+                arr.destroy();
+            });
+
             this.physics.add.overlap(enemyArrows, player, (pl, arr) => {
                 arr.destroy();
                 if (!isShielding) playerHP -= 10;
             });
 
             hpBarPlayer = this.add.graphics().setScrollFactor(0);
-            hpBarEnemy = this.add.graphics();
+            hpBarArcher = this.add.graphics();
+            hpBarMelee = this.add.graphics();
         }
 
         function createPlatform(scene, x, y, w, h) {
@@ -138,9 +147,13 @@
             const hitbox = scene.add.rectangle(player.x + range, player.y, 60, 30, 0xff0000, 0.5);
             scene.physics.add.existing(hitbox);
             hitbox.body.setAllowGravity(false);
-            if (Phaser.Geom.Intersects.RectangleToRectangle(hitbox.getBounds(), enemy.getBounds())) {
-                enemyHP -= 10;
-            }
+            
+            [enemyArcher, enemyMelee].forEach(en => {
+                if (en.active && Phaser.Geom.Intersects.RectangleToRectangle(hitbox.getBounds(), en.getBounds())) {
+                    if (en === enemyArcher) archerHP -= 10;
+                    if (en === enemyMelee) meleeHP -= 10;
+                }
+            });
             scene.time.delayedCall(100, () => hitbox.destroy());
         }
 
@@ -158,14 +171,9 @@
             isShielding = true;
             const shieldX = isFacingRight ? 35 : -35;
             const shieldVisual = scene.add.rectangle(player.x + shieldX, player.y, 15, 75, 0xffff00, 0.6);
-            scene.time.addEvent({
-                delay: 10, repeat: 100,
-                callback: () => { 
-                    shieldVisual.x = player.x + (isFacingRight ? 35 : -35); 
-                    shieldVisual.y = player.y; 
-                }
-            });
-            scene.time.delayedCall(1000, () => { isShielding = false; shieldVisual.destroy(); });
+            
+            // الدرع يختفي بسرعة البرق (100ms) مثل السيف
+            scene.time.delayedCall(100, () => { isShielding = false; shieldVisual.destroy(); });
         }
 
         function update() {
@@ -183,49 +191,62 @@
             if (Phaser.Input.Keyboard.JustDown(keys.O)) handleShoot(this);
             if (Phaser.Input.Keyboard.JustDown(keys.M)) handleShield(this);
 
-            // Enemy AI Logic
-            if (enemy.active && enemyHP > 0) {
-                const distanceToPlayer = Phaser.Math.Distance.Between(player.x, player.y, enemy.x, enemy.y);
-                const verticalDist = Math.abs(player.y - enemy.y);
+            // --- Enemy AI: Archer (Red) ---
+            updateEnemyAI(scene, enemyArcher, archerHP, 'ARCHER');
+            
+            // --- Enemy AI: Melee (Blue) ---
+            updateEnemyAI(scene, enemyMelee, meleeHP, 'MELEE');
 
-                if (enemyState === 'PATROL') {
-                    if (enemy.x >= enemyPatrolStart + enemyPatrolRange) enemy.body.setVelocityX(-ENEMY_SPEED);
-                    else if (enemy.x <= enemyPatrolStart - enemyPatrolRange) enemy.body.setVelocityX(ENEMY_SPEED);
-                    else if (enemy.body.velocity.x === 0) enemy.body.setVelocityX(ENEMY_SPEED);
-
-                    // لا يراك إذا كنت مرتفعاً عنه بأكثر من 100 بكسل
-                    if (distanceToPlayer < 400 && verticalDist < 100) enemyState = 'CHASE';
-                } 
-                else if (enemyState === 'CHASE') {
-                    // تكتيك الانسحاب: إذا اقتربت جداً يبتعد عنك
-                    if (distanceToPlayer < 200) {
-                        const retreatDir = player.x > enemy.x ? -ENEMY_SPEED : ENEMY_SPEED;
-                        enemy.body.setVelocityX(retreatDir);
-                    } else if (distanceToPlayer > 300) {
-                        const chaseDir = player.x > enemy.x ? ENEMY_SPEED : -ENEMY_SPEED;
-                        enemy.body.setVelocityX(chaseDir);
-                    } else {
-                        enemy.body.setVelocityX(0); // يتوقف ليطلق السهام بدقة
-                    }
-                    
-                    // إطلاق السهام
-                    if (scene.time.now > nextEnemyFire && verticalDist < 100) {
-                        const eArrow = scene.add.rectangle(enemy.x, enemy.y, 20, 5, 0xff0000);
-                        enemyArrows.add(eArrow);
-                        eArrow.body.setAllowGravity(false);
-                        eArrow.body.setVelocityX(player.x > enemy.x ? 500 : -500);
-                        scene.time.delayedCall(2000, () => eArrow.destroy());
-                        nextEnemyFire = scene.time.now + 2000;
-                    }
-
-                    // العودة للدورية إذا ابتعدت أو صعدت للأعلى
-                    if (distanceToPlayer > 550 || verticalDist > 150) enemyState = 'PATROL';
-                }
-            } else if (enemy.active) { enemy.destroy(); }
-
+            // UI
             drawHP(hpBarPlayer, 20, 20, playerHP, true);
-            if(enemy.active) drawHP(hpBarEnemy, enemy.x - 25, enemy.y - 60, enemyHP, false);
-            else hpBarEnemy.clear();
+            if(enemyArcher.active) drawHP(hpBarArcher, enemyArcher.x - 25, enemyArcher.y - 60, archerHP, false);
+            if(enemyMelee.active) drawHP(hpBarMelee, enemyMelee.x - 25, enemyMelee.y - 60, meleeHP, false);
+        }
+
+        function updateEnemyAI(scene, en, hp, type) {
+            if (!en.active || hp <= 0) { en.destroy(); return; }
+            
+            const dist = Phaser.Math.Distance.Between(player.x, player.y, en.x, en.y);
+            const vDist = Math.abs(player.y - en.y);
+
+            if (type === 'ARCHER') {
+                if (dist < 400 && vDist < 100) {
+                    if (dist < 200) en.body.setVelocityX(player.x > en.x ? -ENEMY_SPEED : ENEMY_SPEED);
+                    else if (dist > 300) en.body.setVelocityX(player.x > en.x ? ENEMY_SPEED : -ENEMY_SPEED);
+                    else {
+                        en.body.setVelocityX(0);
+                        if (scene.time.now > nextArcherFire) {
+                            fireEnemyArrow(scene, en);
+                            nextArcherFire = scene.time.now + 2000;
+                        }
+                    }
+                } else en.body.setVelocityX(en.x > 1400 ? -ENEMY_SPEED : ENEMY_SPEED);
+            } else {
+                // MELEE AI (Blue)
+                if (dist < 500 && vDist < 100) {
+                    en.body.setVelocityX(player.x > en.x ? ENEMY_SPEED + 20 : -ENEMY_SPEED - 20);
+                    if (dist < 60 && scene.time.now > nextMeleeAttack) {
+                        performMeleeAttack(scene, en);
+                        nextMeleeAttack = scene.time.now + 1000;
+                    }
+                } else en.body.setVelocityX(en.x > 2400 ? -ENEMY_SPEED : ENEMY_SPEED);
+            }
+        }
+
+        function fireEnemyArrow(scene, en) {
+            const arr = scene.add.rectangle(en.x, en.y, 20, 5, 0xff0000);
+            enemyArrows.add(arr);
+            arr.body.setAllowGravity(false);
+            arr.body.setVelocityX(player.x > en.x ? 500 : -500);
+            scene.time.delayedCall(2000, () => arr.destroy());
+        }
+
+        function performMeleeAttack(scene, en) {
+            const hit = scene.add.rectangle(en.x + (player.x > en.x ? 40 : -40), en.y, 40, 20, 0x0000ff, 0.5);
+            if (Phaser.Geom.Intersects.RectangleToRectangle(hit.getBounds(), player.getBounds())) {
+                if (!isShielding) playerHP -= 15;
+            }
+            scene.time.delayedCall(100, () => hit.destroy());
         }
 
         function drawHP(graphics, x, y, hp, isStatic) {

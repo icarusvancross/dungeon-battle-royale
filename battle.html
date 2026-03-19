@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dungeon Battle - Arena</title>
+    <title>Dungeon Battle - Combat Prototype</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <style>
         body { margin: 0; background: #000; overflow: hidden; }
@@ -11,28 +11,28 @@
             position: fixed; bottom: 20px; width: 100%; 
             display: flex; justify-content: space-between; 
             padding: 0 30px; box-sizing: border-box; z-index: 10;
-            pointer-events: none; /* لكي لا يحجب الأزرار عن اللعبة */
+            pointer-events: none;
         }
         .btn { 
-            width: 70px; height: 70px; background: rgba(255,255,255,0.2); 
+            width: 65px; height: 65px; background: rgba(255,255,255,0.2); 
             border: 2px solid #fff; border-radius: 50%; color: white; 
             display: flex; align-items: center; justify-content: center; 
-            font-size: 1.5rem; pointer-events: auto; cursor: pointer;
-            user-select: none;
+            font-size: 1.2rem; pointer-events: auto; cursor: pointer;
         }
         .btn:active { background: rgba(255,255,255,0.5); transform: scale(0.9); }
     </style>
 </head>
 <body>
-    <!-- أزرار التحكم (تعمل بالماوس واللمس) -->
+
     <div id="controls">
-        <div style="display:flex; gap:15px;">
+        <div style="display:flex; gap:10px;">
             <div class="btn" id="left-btn">◀</div>
             <div class="btn" id="right-btn">▶</div>
         </div>
-        <div style="display:flex; gap:15px;">
+        <div style="display:flex; gap:10px;">
             <div class="btn" id="jump-btn">▲</div>
             <div class="btn" id="sword-btn" style="background:red">⚔️</div>
+            <div class="btn" id="shoot-btn" style="background:gold; color:black">🏹</div>
         </div>
     </div>
 
@@ -41,68 +41,122 @@
             type: Phaser.AUTO,
             width: window.innerWidth,
             height: window.innerHeight,
-            physics: { default: 'arcade', arcade: { gravity: { y: 1200 } } },
+            physics: { default: 'arcade', arcade: { gravity: { y: 1200 }, debug: false } },
             scene: { create: create, update: update }
         };
 
-        let player, platforms, wasd, cursors;
+        let player, enemy, platforms, arrows, cursors, wasd, hpBarPlayer, hpBarEnemy;
+        let playerHP = 100, enemyHP = 100;
         let moveLeft = false, moveRight = false, doJump = false;
+        let isFacingRight = true;
 
         new Phaser.Game(config);
 
         function create() {
             const scene = this;
 
-            // 1. الأرضية والمنصات
+            // 1. البيئة
             platforms = this.physics.add.staticGroup();
             platforms.add(this.add.rectangle(window.innerWidth/2, window.innerHeight-20, window.innerWidth, 40, 0x333333));
-            platforms.add(this.add.rectangle(400, 450, 200, 20, 0x666666));
-            platforms.add(this.add.rectangle(700, 300, 200, 20, 0x666666));
+            platforms.add(this.add.rectangle(600, 450, 300, 20, 0x666666));
 
-            // 2. اللاعب (الكبسولة الخضراء)
-            player = this.add.rectangle(100, 100, 40, 60, 0x00ff00);
+            // 2. اللاعب (الأخضر)
+            player = this.add.rectangle(100, 400, 40, 60, 0x00ff00);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
             this.physics.add.collider(player, platforms);
 
-            // 3. إعداد الكيبورد (WASD + Arrows)
+            // 3. العدو (الأحمر)
+            enemy = this.add.rectangle(700, 400, 40, 60, 0xff0000);
+            this.physics.add.existing(enemy);
+            enemy.body.setCollideWorldBounds(true);
+            this.physics.add.collider(enemy, platforms);
+
+            // 4. السهام
+            arrows = this.physics.add.group();
+
+            // 5. عدادات الدم (Graphics)
+            hpBarPlayer = this.add.graphics();
+            hpBarEnemy = this.add.graphics();
+
+            // 6. التحكم
             cursors = this.input.keyboard.createCursorKeys();
             wasd = this.input.keyboard.addKeys('W,A,S,D');
+            this.input.keyboard.on('keydown-SPACE', () => attackMelee(scene));
+            this.input.keyboard.on('keydown-F', () => fireArrow(scene));
 
-            // 4. برمجة الأزرار (PointerDown للماوس واللمس معاً)
+            // أزرار الموبايل
             setupButton('left-btn', () => moveLeft = true, () => moveLeft = false);
             setupButton('right-btn', () => moveRight = true, () => moveRight = false);
             setupButton('jump-btn', () => doJump = true, () => doJump = false);
-            
-            // زر السيف
-            document.getElementById('sword-btn').onpointerdown = () => {
-                const sword = scene.add.rectangle(player.x + (player.body.velocity.x >= 0 ? 40 : -40), player.y, 40, 20, 0xff0000);
-                scene.time.delayedCall(100, () => sword.destroy());
-            };
+            document.getElementById('sword-btn').onpointerdown = () => attackMelee(scene);
+            document.getElementById('shoot-btn').onpointerdown = () => fireArrow(scene);
+
+            // التصادم بين السهم والعدو
+            this.physics.add.overlap(arrows, enemy, (en, arr) => {
+                arr.destroy();
+                enemyHP -= 5; // ضرر السهم 5%
+            });
         }
 
-        function setupButton(id, startFn, endFn) {
+        function setupButton(id, start, end) {
             const btn = document.getElementById(id);
-            btn.onpointerdown = startFn;
-            btn.onpointerup = endFn;
-            btn.onpointerout = endFn; // إذا خرج الماوس من الزر يتوقف التحرك
+            btn.onpointerdown = start; btn.onpointerup = end; btn.onpointerout = end;
+        }
+
+        function attackMelee(scene) {
+            const range = isFacingRight ? 50 : -50;
+            const hitbox = scene.add.rectangle(player.x + range, player.y, 50, 20, 0xff0000, 0.5);
+            scene.physics.add.existing(hitbox);
+            hitbox.body.setAllowGravity(false);
+
+            // تحقق من الإصابة بالسيف
+            if (Phaser.Geom.Intersects.RectangleToRectangle(hitbox.getBounds(), enemy.getBounds())) {
+                enemyHP -= 10; // ضرر السيف 10%
+            }
+            scene.time.delayedCall(100, () => hitbox.destroy());
+        }
+
+        function fireArrow(scene) {
+            const arrow = scene.add.rectangle(player.x, player.y, 20, 5, 0xffff00);
+            arrows.add(arrow);
+            arrow.body.setAllowGravity(false);
+            arrow.body.setVelocityX(isFacingRight ? 600 : -600);
+            scene.time.delayedCall(2000, () => arrow.destroy());
         }
 
         function update() {
-            // منطق الحركة (يدعم الكيبورد والماوس واللمس)
+            // حركة اللاعب
             if (cursors.left.isDown || wasd.A.isDown || moveLeft) {
-                player.body.setVelocityX(-250);
+                player.body.setVelocityX(-250); isFacingRight = false;
             } else if (cursors.right.isDown || wasd.D.isDown || moveRight) {
-                player.body.setVelocityX(250);
-            } else {
-                player.body.setVelocityX(0);
+                player.body.setVelocityX(250); isFacingRight = true;
+            } else { player.body.setVelocityX(0); }
+
+            if ((cursors.up.isDown || wasd.W.isDown || doJump) && player.body.touching.down) {
+                player.body.setVelocityY(-600); doJump = false;
             }
 
-            // منطق القفز
-            if ((cursors.up.isDown || wasd.W.isDown || doJump) && player.body.touching.down) {
-                player.body.setVelocityY(-600);
-                doJump = false;
+            // ذكاء اصطناعي بسيط للعدو (يتحرك نحو اللاعب)
+            if (enemyHP > 0) {
+                if (player.x < enemy.x) enemy.body.setVelocityX(-100);
+                else enemy.body.setVelocityX(100);
+            } else {
+                enemy.destroy(); // يموت العدو
             }
+
+            // تحديث عدادات الدم
+            drawHP(hpBarPlayer, player.x - 25, player.y - 50, playerHP);
+            if(enemy.active) drawHP(hpBarEnemy, enemy.x - 25, enemy.y - 50, enemyHP);
+            else hpBarEnemy.clear();
+        }
+
+        function drawHP(graphics, x, y, hp) {
+            graphics.clear();
+            graphics.fillStyle(0xff0000); // خلفية حمراء
+            graphics.fillRect(x, y, 50, 6);
+            graphics.fillStyle(0x00ff00); // دم أخضر
+            graphics.fillRect(x, y, (hp / 100) * 50, 6);
         }
     </script>
 </body>

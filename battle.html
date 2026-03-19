@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dungeon Battle - AI & Combat</title>
+    <title>Dungeon Battle - Fast Combat</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <style>
         body { margin: 0; background: #050505; overflow: hidden; }
@@ -43,19 +43,22 @@
             type: Phaser.AUTO,
             width: window.innerWidth,
             height: window.innerHeight,
-            physics: { default: 'arcade', arcade: { gravity: { y: 1400 }, debug: false } },
+            physics: { 
+                default: 'arcade', 
+                arcade: { gravity: { y: 2200 }, debug: false } 
+            },
             scene: { create: create, update: update }
         };
 
-        let player, enemy, platforms, arrows, cursors, keys, hpBarPlayer, hpBarEnemy;
+        let player, enemy, platforms, arrows, enemyArrows, cursors, keys, hpBarPlayer, hpBarEnemy;
         let playerHP = 100, enemyHP = 100;
         let moveLeft = false, moveRight = false, isFacingRight = true;
         let canDoubleJump = false, isShielding = false;
         
-        // Enemy AI variables
-        let enemyState = 'PATROL'; // PATROL or CHASE
+        let enemyState = 'PATROL';
         let enemyPatrolStart = 1200;
-        let enemyPatrolRange = 300;
+        let enemyPatrolRange = 400;
+        let nextEnemyFire = 0;
 
         new Phaser.Game(config);
 
@@ -64,11 +67,17 @@
             const worldWidth = 3000;
             this.physics.world.setBounds(0, 0, worldWidth, window.innerHeight);
 
-            // 1. Platforms
+            // 1. Platforms (More Platforms added)
             platforms = this.physics.add.staticGroup();
             createPlatform(this, worldWidth/2, window.innerHeight - 20, worldWidth, 40);
-            createPlatform(this, 600, 450, 300, 30);
-            createPlatform(this, 1200, 450, 300, 30);
+            createPlatform(this, 400, 450, 200, 30);
+            createPlatform(this, 750, 320, 200, 30);
+            createPlatform(this, 1100, 480, 250, 30);
+            createPlatform(this, 1400, 350, 200, 30);
+            createPlatform(this, 1800, 500, 300, 30);
+            createPlatform(this, 2200, 380, 250, 30);
+            createPlatform(this, 2500, 520, 200, 30);
+            createPlatform(this, 2800, 400, 200, 30);
 
             // 2. Player
             player = this.add.rectangle(100, 400, 45, 65, 0x00ff00);
@@ -86,10 +95,11 @@
             this.cameras.main.setBounds(0, 0, worldWidth, window.innerHeight);
             this.cameras.main.startFollow(player, true, 0.1, 0.1);
 
-            // 5. Arrows
+            // 5. Projectiles
             arrows = this.physics.add.group();
+            enemyArrows = this.physics.add.group();
 
-            // 6. Keys (K, O, M, W, A, S, D)
+            // 6. Keys
             cursors = this.input.keyboard.createCursorKeys();
             keys = this.input.keyboard.addKeys('W,A,S,D,K,O,M');
 
@@ -105,6 +115,11 @@
             this.physics.add.overlap(arrows, enemy, (en, arr) => {
                 arr.destroy();
                 enemyHP -= 5;
+            });
+
+            this.physics.add.overlap(enemyArrows, player, (pl, arr) => {
+                arr.destroy();
+                if (!isShielding) playerHP -= 10; // Shield blocks damage
             });
 
             hpBarPlayer = this.add.graphics().setScrollFactor(0);
@@ -124,10 +139,10 @@
 
         function handleJump() {
             if (player.body.touching.down) {
-                player.body.setVelocityY(-650);
+                player.body.setVelocityY(-850); // Faster Jump
                 canDoubleJump = true;
             } else if (canDoubleJump) {
-                player.body.setVelocityY(-600);
+                player.body.setVelocityY(-800);
                 canDoubleJump = false;
             }
         }
@@ -149,21 +164,24 @@
             const arrow = scene.add.rectangle(player.x, player.y, 25, 6, 0xffff00);
             arrows.add(arrow);
             arrow.body.setAllowGravity(false);
-            arrow.body.setVelocityX(isFacingRight ? 750 : -750);
+            arrow.body.setVelocityX(isFacingRight ? 900 : -900);
             scene.time.delayedCall(1500, () => arrow.destroy());
         }
 
         function handleShield(scene) {
             if (isShielding) return;
             isShielding = true;
-            const shieldVisual = scene.add.rectangle(player.x, player.y, 70, 90, 0xffff00, 0.3);
-            shieldVisual.setStrokeStyle(3, 0xffff00);
+            // Directional Shield (Only in front of player)
+            const shieldX = isFacingRight ? 35 : -35;
+            const shieldVisual = scene.add.rectangle(player.x + shieldX, player.y, 15, 75, 0xffff00, 0.6);
+            shieldVisual.setStrokeStyle(2, 0xffffff);
             
             scene.time.addEvent({
                 delay: 10,
                 repeat: 100,
                 callback: () => { 
-                    shieldVisual.x = player.x; 
+                    const currentShieldX = isFacingRight ? 35 : -35;
+                    shieldVisual.x = player.x + currentShieldX; 
                     shieldVisual.y = player.y; 
                 }
             });
@@ -175,11 +193,13 @@
         }
 
         function update() {
+            const scene = this;
+
             // Player Movement
             if (cursors.left.isDown || keys.A.isDown || moveLeft) {
-                player.body.setVelocityX(-300); isFacingRight = false;
+                player.body.setVelocityX(-350); isFacingRight = false;
             } else if (cursors.right.isDown || keys.D.isDown || moveRight) {
-                player.body.setVelocityX(300); isFacingRight = true;
+                player.body.setVelocityX(350); isFacingRight = true;
             } else { player.body.setVelocityX(0); }
 
             if (Phaser.Input.Keyboard.JustDown(keys.W) || Phaser.Input.Keyboard.JustDown(cursors.up)) handleJump();
@@ -192,27 +212,31 @@
                 const distanceToPlayer = Phaser.Math.Distance.Between(player.x, player.y, enemy.x, enemy.y);
 
                 if (enemyState === 'PATROL') {
-                    // Patrol Movement
-                    if (enemy.x >= enemyPatrolStart + enemyPatrolRange) enemy.body.setVelocityX(-100);
-                    else if (enemy.x <= enemyPatrolStart - enemyPatrolRange) enemy.body.setVelocityX(100);
-                    else if (enemy.body.velocity.x === 0) enemy.body.setVelocityX(100);
-
-                    // Switch to Chase
-                    if (distanceToPlayer < 350) enemyState = 'CHASE';
+                    if (enemy.x >= enemyPatrolStart + enemyPatrolRange) enemy.body.setVelocityX(-120);
+                    else if (enemy.x <= enemyPatrolStart - enemyPatrolRange) enemy.body.setVelocityX(120);
+                    else if (enemy.body.velocity.x === 0) enemy.body.setVelocityX(120);
+                    if (distanceToPlayer < 400) enemyState = 'CHASE';
                 } 
                 else if (enemyState === 'CHASE') {
-                    // Chase Player
-                    const direction = player.x > enemy.x ? 150 : -150;
+                    const direction = player.x > enemy.x ? 180 : -180;
                     enemy.body.setVelocityX(direction);
+                    
+                    // Enemy Shooting Logic
+                    if (scene.time.now > nextEnemyFire) {
+                        const eArrow = scene.add.rectangle(enemy.x, enemy.y, 20, 5, 0xff0000);
+                        enemyArrows.add(eArrow);
+                        eArrow.body.setAllowGravity(false);
+                        eArrow.body.setVelocityX(player.x > enemy.x ? 500 : -500);
+                        scene.time.delayedCall(2000, () => eArrow.destroy());
+                        nextEnemyFire = scene.time.now + 2000; // Fire every 2 seconds
+                    }
 
-                    // Switch back to Patrol (7 meters = approx 450px)
-                    if (distanceToPlayer > 450) enemyState = 'PATROL';
+                    if (distanceToPlayer > 550) enemyState = 'PATROL';
                 }
             } else if (enemy.active) {
                 enemy.destroy();
             }
 
-            // UI Update
             drawHP(hpBarPlayer, 20, 20, playerHP, true);
             if(enemy.active) drawHP(hpBarEnemy, enemy.x - 25, enemy.y - 60, enemyHP, false);
             else hpBarEnemy.clear();
@@ -223,7 +247,7 @@
             graphics.fillStyle(0x000000);
             graphics.fillRect(x, y, 100, 10);
             graphics.fillStyle(hp > 30 ? 0x00ff00 : 0xff0000);
-            graphics.fillRect(x, y, (hp / 100) * 100, 10);
+            graphics.fillRect(x, y, Math.max(0, (hp / 100) * 100), 10);
         }
     </script>
 </body>

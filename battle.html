@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Dungeon Battle - Fixed & Pro</title>
+    <title>Dungeon Battle - Fixed Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <style>
         body { margin: 0; background: #000; overflow: hidden; }
@@ -95,8 +95,9 @@
             document.getElementById('shoot-btn').onpointerdown = () => handleShoot(scene);
             document.getElementById('shield-btn').onpointerdown = () => handleShield(scene);
 
-            // Damage Overlaps
+            // Damage Logic
             this.physics.add.overlap(arrows, [enemyArcher, enemyMelee, enemyTank], (arr, en) => {
+                if (!en.active) return;
                 if (en === enemyArcher) archerHP -= 5;
                 if (en === enemyMelee) meleeHP -= 5;
                 if (en === enemyTank) {
@@ -141,7 +142,7 @@
             playerHP -= amount;
             canTakeDamage = false;
             player.setAlpha(0.5);
-            setTimeout(() => { canTakeDamage = true; player.setAlpha(1); }, 1000);
+            setTimeout(() => { if(player) { canTakeDamage = true; player.setAlpha(1); } }, 1000);
         }
 
         function setupButton(id, start, end) {
@@ -156,14 +157,14 @@
 
         function handleSword(scene) {
             if (isShielding) return;
-            // FIX: Sword now spawns IN FRONT of player, not inside
-            const offset = isFacingRight ? 60 : -60; 
-            const hitbox = scene.add.rectangle(player.x + offset, player.y, 50, 30, 0xff0000, 0.6);
+            // FIX: Sword spawns FAR in front of player (90px offset)
+            const offset = isFacingRight ? 90 : -90; 
+            const hitbox = scene.add.rectangle(player.x + offset, player.y, 60, 30, 0xff0000, 0.6);
             scene.physics.add.existing(hitbox);
             hitbox.body.setAllowGravity(false);
             
             [enemyArcher, enemyMelee, enemyTank].forEach(en => {
-                if (en.active && Phaser.Geom.Intersects.RectangleToRectangle(hitbox.getBounds(), en.getBounds())) {
+                if (en && en.active && Phaser.Geom.Intersects.RectangleToRectangle(hitbox.getBounds(), en.getBounds())) {
                     if (en === enemyArcher) archerHP -= 10;
                     if (en === enemyMelee) meleeHP -= 10;
                     if (en === enemyTank) {
@@ -194,6 +195,8 @@
 
         function update() {
             const scene = this;
+            if (!player.active) return;
+
             if (cursors.left.isDown || keys.A.isDown || moveLeft) { player.body.setVelocityX(-350); isFacingRight = false; }
             else if (cursors.right.isDown || keys.D.isDown || moveRight) { player.body.setVelocityX(350); isFacingRight = true; }
             else { player.body.setVelocityX(0); }
@@ -207,11 +210,12 @@
             updateEnemyAI(scene, enemyMelee, meleeHP, 'MELEE');
             updateEnemyAI(scene, enemyTank, tankHP, 'TANK');
 
-            if (enemyTank.active && tankShield.active) {
+            if (enemyTank && enemyTank.active) {
                 const shieldOffset = enemyTank.body.velocity.x >= 0 ? 30 : -30;
                 tankShield.x = enemyTank.x + shieldOffset;
                 tankShield.y = enemyTank.y;
-            }
+                tankShield.setVisible(true);
+            } else if(tankShield) { tankShield.setVisible(false); }
 
             drawHP(hpBarPlayer, 20, 20, playerHP, true);
             if(enemyArcher.active && archerHP > 0) drawHP(hpBarArcher, enemyArcher.x - 25, enemyArcher.y - 60, archerHP, false); else hpBarArcher.clear();
@@ -220,7 +224,7 @@
         }
 
         function updateEnemyAI(scene, en, hp, type) {
-            if (!en.active || hp <= 0) { en.destroy(); return; }
+            if (!en || !en.active || hp <= 0) { if(en && en.active) en.destroy(); return; }
             const dist = Phaser.Math.Distance.Between(player.x, player.y, en.x, en.y);
             const vDist = Math.abs(player.y - en.y);
 
@@ -246,11 +250,11 @@
                     scene.time.delayedCall(600, () => {
                         tankIsBoosting = false; tankIsSlowed = true;
                         en.setAlpha(0.4); en.body.setVelocityX(0);
-                        scene.time.delayedCall(1200, () => { tankIsSlowed = false; en.setAlpha(1); nextTankBoost = scene.time.now + 3000; });
+                        scene.time.delayedCall(1200, () => { tankIsSlowed = false; if(en.active) en.setAlpha(1); nextTankBoost = scene.time.now + 3000; });
                     });
                 } else if (!tankIsBoosting) {
                     if (playerDir !== tankLastDir && scene.time.now > tankTurnTimer) {
-                        tankTurnTimer = scene.time.now + 600;
+                        tankTurnTimer = scene.time.now + 800; // 0.8s Heavy turn
                         tankLastDir = playerDir;
                     }
                     if (scene.time.now > tankTurnTimer) en.body.setVelocityX(tankLastDir * 70);

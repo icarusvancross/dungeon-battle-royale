@@ -3,187 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Dungeon Battle Royale</title>
+    <title>Dungeon Battle Royale - Prototype</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <style>
         :root { --gold: #ffd700; --lava: #ff4500; --dark: #050505; }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
         
-        body { 
-            margin: 0; background: var(--dark); color: white; 
-            font-family: 'Courier New', Courier, monospace; 
-            overflow: hidden; height: 100vh; width: 100vw;
-            position: fixed;
-            /* خلفية دنجن مؤقتة احترافية */
-            background-image: url('https://img.itch.zone/aW1nLzI0ODMxNjgucG5n/original/7vY6vV.png');
-            background-size: cover;
-            background-position: center;
-        }
-
-        /* Portrait Warning */
-        @media screen and (orientation: portrait) { #rotate-device { display: flex !important; } }
-        #rotate-device {
-            position: fixed; inset: 0; background: #000; z-index: 9999;
-            display: none; flex-direction: column; align-items: center; justify-content: center;
-        }
-
-        /* Auth Screen */
-        #auth-screen {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.9);
-            z-index: 500; display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-        .auth-box { 
-            background: #1a1a1a; padding: 25px; 
-            border: 4px solid #333; border-image: url('https://img.itch.zone/aW1nLzI0ODMxNjgucG5n/original/7vY6vV.png') 30 stretch;
-            text-align: center; width: 90%; max-width: 400px; 
-        }
-        .input-field { width: 100%; padding: 12px; margin: 8px 0; background: #000; border: 2px solid #444; color: #0f0; border-radius: 0; }
-        
-        /* Lobby Layout */
+        /* Lobby Styles */
         #lobby-ui { 
-            display: none; height: 100vh; width: 100vw;
-            padding: env(safe-area-inset-top) 20px env(safe-area-inset-bottom) 20px;
-            grid-template-columns: 1fr 2fr 1fr; grid-template-rows: 60px 1fr 80px;
-            background: rgba(0,0,0,0.4); /* تعتيم خفيف للخلفية لبروز الأزرار */
+            position: fixed; inset: 0; background: radial-gradient(circle, #222, #000);
+            z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .btn-play { 
+            background: var(--lava); color: white; padding: 20px 60px; 
+            border: 3px solid white; font-size: 2rem; cursor: pointer; font-weight: bold;
+            box-shadow: 0 0 20px var(--lava);
         }
 
-        .top-left { grid-area: 1 / 1; padding: 10px; }
-        .top-right { grid-area: 1 / 3; display: flex; align-items: flex-start; justify-content: flex-end; padding: 10px; gap: 10px; }
+        /* Game Container */
+        #game-container { display: none; width: 100vw; height: 100vh; }
         
-        .center-stage { grid-area: 2 / 2; display: flex; align-items: center; justify-content: center; position: relative; }
-        
-        /* صورة الشخصية الحقيقية */
-        .character-img {
-            width: 120px; image-rendering: pixelated; /* للحفاظ على جودة البكسل */
-            animation: idle 1s steps(4) infinite;
+        /* Mobile Controls */
+        #mobile-controls {
+            position: fixed; bottom: 20px; left: 20px; right: 20px;
+            display: none; justify-content: space-between; z-index: 200;
         }
-        @keyframes idle { from { transform: scale(3); } to { transform: scale(3.1); } }
-
-        .side-menu { grid-area: 2 / 3; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
-        .bottom-bar { grid-area: 3 / 1 / 3 / 4; display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 10px; }
-
-        .profile-card { background: rgba(0,0,0,0.8); padding: 8px 15px; border: 2px solid var(--gold); }
-        .stat-box { background: #000; color: var(--gold); padding: 6px 15px; border: 2px solid var(--gold); font-weight: bold; cursor: pointer; display: flex; align-items: center; }
-        
-        .btn-main { background: var(--lava); color: white; padding: 12px 50px; border: 3px solid white; cursor: pointer; font-size: 1.3rem; font-weight: bold; font-family: 'Courier New', Courier, monospace; }
-        .btn-side { background: #222; color: white; padding: 10px; border: 2px solid #555; cursor: pointer; text-transform: uppercase; font-size: 0.7rem; }
-        .btn-auth { background: var(--gold); color: black; padding: 12px; border: none; cursor: pointer; font-weight: bold; width: 45%; margin: 5px; }
-        .guest-link { color: #aaa; text-decoration: underline; cursor: pointer; font-size: 0.85rem; display: block; margin-top: 20px; }
+        .control-btn { 
+            width: 70px; height: 70px; background: rgba(255,255,255,0.2); 
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; color: white; border: 2px solid #fff;
+        }
     </style>
 </head>
 <body>
 
-    <div id="rotate-device">
-        <span style="font-size: 3rem;">📱🔄</span>
-        <p>PLEASE ROTATE TO LANDSCAPE</p>
-    </div>
-
-    <div id="auth-screen">
-        <h1 style="color: var(--gold); letter-spacing: 6px; text-shadow: 4px 4px #000;">DUNGEON BATTLE</h1>
-        <div class="auth-box">
-            <input type="email" id="email" class="input-field" placeholder="EMAIL">
-            <input type="password" id="password" class="input-field" placeholder="PASSWORD">
-            <div style="display: flex; justify-content: center;">
-                <button class="btn-auth" onclick="handleAuth('signup')">SIGN UP</button>
-                <button class="btn-auth" onclick="handleAuth('login')" style="background:white">LOGIN</button>
-            </div>
-            <span class="guest-link" onclick="startGuest()">PLAY AS GUEST</span>
-        </div>
-    </div>
-
+    <!-- Lobby UI -->
     <div id="lobby-ui">
-        <div class="top-left">
-            <div class="profile-card">
-                <div id="user-name" style="font-size: 1rem; color: var(--gold);">PLAYER</div>
-                <div style="font-size: 0.6rem;">LVL 1 WARRIOR</div>
-            </div>
-        </div>
+        <h1 style="color: var(--gold); font-size: 3rem; margin-bottom: 50px;">DUNGEON PROTOTYPE</h1>
+        <button class="btn-play" onclick="startBattle()">START BATTLE</button>
+        <p style="color: #888; margin-top: 20px;">Controls: WASD to Move | SPACE to Sword | F to Shoot</p>
+    </div>
 
-        <div class="top-right">
-            <div class="stat-box">🪙 <span id="user-coins">0</span></div>
-            <div class="stat-box" onclick="toggleFullScreen()">⛶</div>
-        </div>
+    <!-- Game Container -->
+    <div id="game-container"></div>
 
-        <div class="center-stage">
-            <!-- صورة الفارس البكسل آرت -->
-            <img src="https://vladimirslepnev.github.io/pico-8-dungeon-crawler/knight.png" class="character-img" alt="Knight">
+    <!-- Mobile Controls -->
+    <div id="mobile-controls">
+        <div style="display: flex; gap: 10px;">
+            <div class="control-btn" id="btn-left">◀</div>
+            <div class="control-btn" id="btn-right">▶</div>
         </div>
-
-        <div class="side-menu">
-            <button class="btn-side">Warehouse</button>
-            <button class="btn-side">Lucky Wheel</button>
-            <button class="btn-side">Shop</button>
-            <button class="btn-side">Settings</button>
-        </div>
-
-        <div class="bottom-bar">
-            <div style="background: rgba(0,0,0,0.8); padding: 8px; font-size: 0.7rem; border: 1px solid #444; max-width: 250px;">
-                SYS: Welcome to the Dark Dungeon...
-            </div>
-            <button class="btn-main" onclick="alert('Searching for Match...')">BATTLE</button>
+        <div style="display: flex; gap: 10px;">
+            <div class="control-btn" id="btn-jump">▲</div>
+            <div class="control-btn" id="btn-sword" style="background: var(--lava);">⚔️</div>
+            <div class="control-btn" id="btn-shoot" style="background: var(--gold); color: black;">🏹</div>
         </div>
     </div>
 
     <script>
-        const SB_URL = "https://qcgcyqvrfvkajbqlszbp.supabase.co";
-        const SB_KEY = "sb_publishable_juEni3P1axAVBjMLrihkWw_pYmLGvEy";
-        const _supabase = supabase.createClient(SB_URL, SB_KEY);
+        // --- Game Logic (Phaser) ---
+        let player;
+        let cursors;
+        let platforms;
+        let arrows;
+        let isFacingRight = true;
 
-        function toggleFullScreen() {
-            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                const el = document.documentElement;
-                if (el.requestFullscreen) el.requestFullscreen();
-                else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-            } else {
-                if (document.exitFullscreen) document.exitFullscreen();
-                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-            }
-        }
-
-        async function handleAuth(type) {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            if(!email || !password) return alert("Fill credentials!");
-
-            let result;
-            if(type === 'signup') {
-                result = await _supabase.auth.signUp({ email, password });
-                if(!result.error && result.data.user) {
-                    await _supabase.from('profiles').insert([{ id: result.data.user.id, username: 'Warrior', silver_coins: 500 }]);
-                    alert("Welcome! 500 Coins added.");
-                }
-            } else {
-                result = await _supabase.auth.signInWithPassword({ email, password });
-            }
-
-            if(result.error) alert(result.error.message);
-            else loadLobby(result.data.user.id);
-        }
-
-        function startGuest() {
-            document.getElementById('user-name').innerText = "GUEST_" + Math.floor(Math.random()*999);
-            document.getElementById('user-coins').innerText = "0";
-            showLobby();
-        }
-
-        async function loadLobby(userId) {
-            const { data: profile } = await _supabase.from('profiles').select('*').eq('id', userId).single();
-            if(profile) {
-                document.getElementById('user-name').innerText = profile.username;
-                document.getElementById('user-coins').innerText = profile.silver_coins;
-                showLobby();
-            }
-        }
-
-        function showLobby() {
-            document.getElementById('auth-screen').style.display = 'none';
-            document.getElementById('lobby-ui').style.display = 'grid';
-        }
-
-        window.onload = async () => {
-            const { data } = await _supabase.auth.getUser();
-            if(data.user) loadLobby(data.user.id);
+        const config = {
+            type: Phaser.AUTO,
+            parent: 'game-container',
+            width: window.innerWidth,
+            height: window.innerHeight,
+            physics: {
+                default: 'arcade',
+                arcade: { gravity: { y: 1000 }, debug: false }
+            },
+            scene: { preload: preload, create: create, update: update }
         };
+
+        function preload() {
+            // No assets needed for prototype, we use graphics
+        }
+
+        function create() {
+            const scene = this;
+            
+            // 1. Create Platforms
+            platforms = this.physics.add.staticGroup();
+            const ground = this.add.rectangle(window.innerWidth/2, window.innerHeight - 20, window.innerWidth, 40, 0x333333);
+            platforms.add(ground);
+            
+            // Add some random platforms
+            platforms.create(400, 400, null).setDisplaySize(200, 20).setOrigin(0).setRectangle(200, 20).setFillStyle(0x555555);
+            platforms.create(100, 250, null).setDisplaySize(200, 20).setOrigin(0).setRectangle(200, 20).setFillStyle(0x555555);
+
+            // 2. Create Player (Capsule)
+            player = this.add.rectangle(100, 450, 40, 60, 0x00ff00);
+            this.physics.add.existing(player);
+            player.body.setCollideWorldBounds(true);
+            this.physics.add.collider(player, platforms);
+
+            // 3. Arrows Group
+            arrows = this.physics.add.group();
+
+            // 4. Controls
+            cursors = this.input.keyboard.createCursorKeys();
+            this.input.keyboard.on('keydown-SPACE', () => swordAttack(scene));
+            this.input.keyboard.on('keydown-F', () => shootArrow(scene));
+
+            // Mobile Button Events
+            setupMobileControls(scene);
+        }
+
+        function update() {
+            const speed = 200;
+            if (cursors.left.isDown || window.moveLeft) {
+                player.body.setVelocityX(-speed);
+                isFacingRight = false;
+            } else if (cursors.right.isDown || window.moveRight) {
+                player.body.setVelocityX(speed);
+                isFacingRight = true;
+            } else {
+                player.body.setVelocityX(0);
+            }
+
+            if ((cursors.up.isDown || window.doJump) && player.body.touching.down) {
+                player.body.setVelocityY(-500);
+                window.doJump = false;
+            }
+        }
+
+        function swordAttack(scene) {
+            const offsetX = isFacingRight ? 40 : -40;
+            const swordHitbox = scene.add.rectangle(player.x + offsetX, player.y, 40, 20, 0xff0000);
+            scene.physics.add.existing(swordHitbox);
+            swordHitbox.body.setAllowGravity(false);
+            
+            // Sword animation (disappear after 100ms)
+            scene.time.delayedCall(100, () => swordHitbox.destroy());
+        }
+
+        function shootArrow(scene) {
+            const arrow = scene.add.circle(player.x, player.y, 5, 0xffff00);
+            scene.physics.add.existing(arrow);
+            arrow.body.setAllowGravity(false);
+            const velocity = isFacingRight ? 500 : -500;
+            arrow.body.setVelocityX(velocity);
+            
+            // Destroy arrow after 2 seconds
+            scene.time.delayedCall(2000, () => arrow.destroy());
+        }
+
+        // --- UI Functions ---
+        function startBattle() {
+            document.getElementById('lobby-ui').style.display = 'none';
+            document.getElementById('game-container').style.display = 'block';
+            if(window.innerWidth < 1000) document.getElementById('mobile-controls').style.display = 'flex';
+            
+            new Phaser.Game(config);
+        }
+
+        function setupMobileControls(scene) {
+            const btnLeft = document.getElementById('btn-left');
+            const btnRight = document.getElementById('btn-right');
+            const btnJump = document.getElementById('btn-jump');
+            const btnSword = document.getElementById('btn-sword');
+            const btnShoot = document.getElementById('btn-shoot');
+
+            btnLeft.ontouchstart = () => window.moveLeft = true;
+            btnLeft.ontouchend = () => window.moveLeft = false;
+            btnRight.ontouchstart = () => window.moveRight = true;
+            btnRight.ontouchend = () => window.moveRight = false;
+            btnJump.ontouchstart = () => window.doJump = true;
+            btnSword.ontouchstart = () => swordAttack(scene);
+            btnShoot.ontouchstart = () => shootArrow(scene);
+        }
     </script>
 </body>
 </html>

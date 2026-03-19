@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Dungeon Battle - Pro Arena</title>
+    <title>Dungeon Battle - Physics Fixed</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <style>
-        body { margin: 0; background: #050505; overflow: hidden; }
+        body { margin: 0; background: #000; overflow: hidden; }
         #controls { position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 30px; box-sizing: border-box; z-index: 10; pointer-events: none; }
         .btn { width: 65px; height: 65px; background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.5); border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; pointer-events: auto; cursor: pointer; backdrop-filter: blur(5px); font-weight: bold; }
         .btn:active { background: rgba(255,255,255,0.4); transform: scale(0.9); }
@@ -50,7 +50,6 @@
         let nextArcherFire = 0, nextMeleeAttack = 0, nextTankBoost = 0;
         let tankIsBoosting = false, tankIsSlowed = false;
 
-        // Patrol Points
         const archerStart = 1200, meleeStart = 1800, tankStart = 2500;
 
         new Phaser.Game(config);
@@ -73,16 +72,17 @@
             createPlatform(this, 1000, 480, 250, 30);
             createPlatform(this, 1800, 450, 300, 30);
 
-            player = this.add.rectangle(100, 400, 45, 65, 0x00ff00);
+            // Player (Spawn high to fall on ground)
+            player = this.add.rectangle(100, 300, 45, 65, 0x00ff00);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
             this.physics.add.collider(player, platforms);
 
-            enemyArcher = createEnemy(this, archerStart, 400, 0xff0000);
-            enemyMelee = createEnemy(this, meleeStart, 400, 0x0000ff);
-            enemyTank = createEnemy(this, tankStart, 400, 0x888888, 55, 75);
-            enemyTank.body.setImmovable(true); 
-
+            // Enemies (Spawn at y=300 to avoid clipping)
+            enemyArcher = createEnemy(this, archerStart, 300, 0xff0000);
+            enemyMelee = createEnemy(this, meleeStart, 300, 0x0000ff);
+            enemyTank = createEnemy(this, tankStart, 300, 0x888888, 55, 75);
+            
             tankShield = this.add.rectangle(0, 0, 15, 75, 0xffff00);
 
             this.cameras.main.setBounds(0, 0, worldWidth, window.innerHeight);
@@ -130,7 +130,7 @@
             const en = scene.add.rectangle(x, y, w, h, color);
             scene.physics.add.existing(en);
             en.body.setCollideWorldBounds(true);
-            en.body.setImmovable(true); 
+            en.body.setPushable(false); 
             scene.physics.add.collider(en, platforms);
             return en;
         }
@@ -200,7 +200,6 @@
             if (Phaser.Input.Keyboard.JustDown(keys.O)) handleShoot(this);
             if (Phaser.Input.Keyboard.JustDown(keys.M)) handleShield(this);
 
-            // Update AI for each enemy
             updateEnemyLogic(scene, enemyArcher, archerHP, 'ARCHER', archerStart, hpBarArcher);
             updateEnemyLogic(scene, enemyMelee, meleeHP, 'MELEE', meleeStart, hpBarMelee);
             updateEnemyLogic(scene, enemyTank, tankHP, 'TANK', tankStart, hpBarTank);
@@ -237,7 +236,6 @@
                     } else if (!tankIsBoosting) { en.body.velocity.x = Phaser.Math.Linear(en.body.velocity.x, player.x > en.x ? 70 : -70, 0.05); }
                 }
             } else {
-                // Patrol Logic
                 if (en.x >= startX + 450) en.body.setVelocityX(-100);
                 else if (en.x <= startX - 450) en.body.setVelocityX(100);
                 else if (en.body.velocity.x === 0) en.body.setVelocityX(100);

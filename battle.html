@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Dungeon Battle - Fixed Physics</title>
+    <title>Dungeon Battle - Fixed & Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
     <style>
-        body { margin: 0; background: #050505; overflow: hidden; }
+        body { margin: 0; background: #000; overflow: hidden; }
         #controls { position: fixed; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 30px; box-sizing: border-box; z-index: 10; pointer-events: none; }
         .btn { width: 65px; height: 65px; background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.5); border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; pointer-events: auto; cursor: pointer; backdrop-filter: blur(5px); font-weight: bold; }
         .btn:active { background: rgba(255,255,255,0.4); transform: scale(0.9); }
@@ -68,6 +68,7 @@
             createPlatform(this, 1000, 480, 250, 30);
             createPlatform(this, 1800, 450, 300, 30);
 
+            // Player
             player = this.add.rectangle(100, 400, 45, 65, 0x00ff00);
             this.physics.add.existing(player);
             player.body.setCollideWorldBounds(true);
@@ -94,8 +95,8 @@
             document.getElementById('shoot-btn').onpointerdown = () => handleShoot(scene);
             document.getElementById('shield-btn').onpointerdown = () => handleShield(scene);
 
-            // Overlaps & Damage Logic
-            this.physics.add.overlap(arrows, [enemyArcher, enemyMelee, enemyTank], (en, arr) => {
+            // Damage Overlaps
+            this.physics.add.overlap(arrows, [enemyArcher, enemyMelee, enemyTank], (arr, en) => {
                 if (en === enemyArcher) archerHP -= 5;
                 if (en === enemyMelee) meleeHP -= 5;
                 if (en === enemyTank) {
@@ -125,7 +126,7 @@
             const en = scene.add.rectangle(x, y, w, h, color);
             scene.physics.add.existing(en);
             en.body.setCollideWorldBounds(true);
-            en.body.setPushable(false); // FIX: Can't be pushed but still falls/moves
+            en.body.setPushable(false); 
             scene.physics.add.collider(en, platforms);
             return en;
         }
@@ -140,7 +141,7 @@
             playerHP -= amount;
             canTakeDamage = false;
             player.setAlpha(0.5);
-            setTimeout(() => { canTakeDamage = true; player.setAlpha(1); }, 1000); // 1s Cooldown
+            setTimeout(() => { canTakeDamage = true; player.setAlpha(1); }, 1000);
         }
 
         function setupButton(id, start, end) {
@@ -155,10 +156,12 @@
 
         function handleSword(scene) {
             if (isShielding) return;
-            const range = isFacingRight ? 85 : -85;
-            const hitbox = scene.add.rectangle(player.x + range, player.y, 60, 30, 0xff0000, 0.6);
+            // FIX: Sword now spawns IN FRONT of player, not inside
+            const offset = isFacingRight ? 60 : -60; 
+            const hitbox = scene.add.rectangle(player.x + offset, player.y, 50, 30, 0xff0000, 0.6);
             scene.physics.add.existing(hitbox);
             hitbox.body.setAllowGravity(false);
+            
             [enemyArcher, enemyMelee, enemyTank].forEach(en => {
                 if (en.active && Phaser.Geom.Intersects.RectangleToRectangle(hitbox.getBounds(), en.getBounds())) {
                     if (en === enemyArcher) archerHP -= 10;
@@ -204,11 +207,11 @@
             updateEnemyAI(scene, enemyMelee, meleeHP, 'MELEE');
             updateEnemyAI(scene, enemyTank, tankHP, 'TANK');
 
-            if (enemyTank.active) {
+            if (enemyTank.active && tankShield.active) {
                 const shieldOffset = enemyTank.body.velocity.x >= 0 ? 30 : -30;
                 tankShield.x = enemyTank.x + shieldOffset;
                 tankShield.y = enemyTank.y;
-            } else { if(tankShield.active) tankShield.destroy(); }
+            }
 
             drawHP(hpBarPlayer, 20, 20, playerHP, true);
             if(enemyArcher.active && archerHP > 0) drawHP(hpBarArcher, enemyArcher.x - 25, enemyArcher.y - 60, archerHP, false); else hpBarArcher.clear();
@@ -246,13 +249,12 @@
                         scene.time.delayedCall(1200, () => { tankIsSlowed = false; en.setAlpha(1); nextTankBoost = scene.time.now + 3000; });
                     });
                 } else if (!tankIsBoosting) {
-                    // FIX: Heavy Turning Logic
                     if (playerDir !== tankLastDir && scene.time.now > tankTurnTimer) {
-                        tankTurnTimer = scene.time.now + 600; // 0.6s Delay to turn
+                        tankTurnTimer = scene.time.now + 600;
                         tankLastDir = playerDir;
                     }
                     if (scene.time.now > tankTurnTimer) en.body.setVelocityX(tankLastDir * 70);
-                    else en.body.setVelocityX(0); // Pause while turning
+                    else en.body.setVelocityX(0);
                 }
             }
         }
